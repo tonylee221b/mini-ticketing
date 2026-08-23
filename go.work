@@ -1,0 +1,8 @@
+go 1.26
+
+use (
+	./services/concert
+	./services/reservation
+	./services/payment
+	./services/notification
+)

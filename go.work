@@ -1,8 +1,11 @@
-go 1.26
+go 1.26.5
 
 use (
+	./services/api-gateway
+	./services/auth
 	./services/concert
-	./services/reservation
-	./services/payment
 	./services/notification
+	./services/payment
+	./services/reservation
+	./services/saga-orchestrator
 )

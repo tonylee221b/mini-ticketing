@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api-gateway
+          - auth
+          - concert
+          - notification
+          - payment
+          - reservation
+          - saga-orchestrator
+
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.work
+          cache: false
+
+      - name: Verify module dependencies
+        run: go mod verify
+
+      - name: Check formatting
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [[ -n "$unformatted" ]]; then
+            echo "The following files are not formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Detect Go source
+        id: source
+        shell: bash
+        run: |
+          if [[ -n "$(find . -type f -name '*.go' -print -quit)" ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No Go packages yet; skipping vet, test, and builds."
+          fi
+
+      - name: Vet and test
+        if: steps.source.outputs.present == 'true'
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Build
+        if: steps.source.outputs.present == 'true'
+        run: go build ./...
+
+      - name: Build container image
+        if: steps.source.outputs.present == 'true'
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker build \
+            --file "deploy/docker/${{ matrix.service }}.Dockerfile" \
+            --tag "mini-ticket/${{ matrix.service }}:ci" \
+            .
